@@ -1,112 +1,196 @@
+// coordinate dimension
 const coordDim = 3;
 
+// id pool
+let idPool = {
+    nodeId : 0,
+    elementId : 0,
+    DoFId : 0,
+    firstID : 1,
+    assignNodeId : function() {
+        this.nodeId += 1;
+        return this.nodeId;
+    },
+    assignElementId : function() {
+        this.elementId += 1;
+        return this.elementId;
+    },
+    assignDoFId : function() {
+        this.DoFId += 1;
+        return this.DoFId;
+    }
+};
+
 // node factory function
-const createNode = function (coord) {
+const createNode = function (coord, idPool) {
     if (!(coord instanceof Array)) throw "need an 3-element array to create a node!";
     if (coordDim !== coord.length) throw "need a coordinate with " + coordDim + " dimensions!";
+
     return {
-        id : 0,
+        id : idPool.assignNodeId(),
         coord,
-        nexts : new Array(),
-        addNext(next) {
-            this.nexts.push(next);
+    }
+}
+
+// element factory function
+const createElement = function(node1, node2, idPool) {
+    if (null === node1 || null === node2) throw "each element need two nodes!";
+
+    return {
+        id : idPool.assignElementId(),
+        _1 : {
+            nodeId : node1.id,
+            DoF : NaN
+        },
+        _2 : {
+            nodeId : node2.id,
+            DoF : NaN
         }
     }
 }
 
-// count how many node are there
-function countNodes(node, counter) {
-    if (null === node) return;
-    counter.count += 1;
-    if (node.nexts.length !== 0) {
-        node.nexts.forEach(next => {
-            countNodes(next, counter);
-        });
+// node to element mapping 
+const createNodeToElementMap = function(nodes, elements) {
+    // create a mapping array
+    let mapArr = new Array();
+    elements.forEach(element => {
+        // map node 1 of the element
+        if (mapArr[element._1.nodeId]) {
+            mapArr[element._1.nodeId].push(element.id);
+        } else {
+            mapArr[element._1.nodeId] = [element.id];
+        }
+
+        // map node 2 of the element
+        if (mapArr[element._2.nodeId]) {
+            mapArr[element._2.nodeId].push(element.id);
+        } else {
+            mapArr[element._2.nodeId] = [element.id];
+        }
+    });
+
+    return mapArr;
+}
+
+// assign DoF and create DoF to node mapping
+const assignDoFsToNodes = function(nodes, elements, nodeToElementMapArr, idPool) {
+    if (null === elements || 0 === elements.length) throw "need at least one element to start assigning DoF!";
+    if (null === nodes || 0 === nodes.length) throw "There is no node provided!"
+
+    // DoF to node map array
+    let DoFToNodeMapArr = new Array();
+
+    // DFS stack for node
+    let nodeStk = new Array();
+
+    // DFS first step: assign DoF to the first node
+    let nodeId = nodes[idPool.firstID].id;
+    assignDoFToFirstElementWithNode(nodeId, elements, nodeToElementMapArr, Math.sign(1));
+
+    // DFS first step: push the first node into node stack and map DoF
+    nodeStk.push(nodeId);
+
+    // DFS second step: iteration
+    while (0 !== nodeStk.length) {
+        // pop node stack top
+        let nodeId = nodeStk.pop();
+
+        // get the elements with this node
+        let elementIdArrWithNode = nodeToElementMapArr[nodeId];
+
+        let assignedDoF;        // the DoF is already assigned when i = 0, record this DoF
+        for (let i = 0; i < elementIdArrWithNode.length; i++) {
+            let element = elements[elementIdArrWithNode[i]];
+            let localNodeId = getLocalNodeId(element, nodeId);
+            let localOtherNodeId = getOtherLocalNodeId(localNodeId);
+
+            if (0 === i) {
+                assignedDoF = element[localNodeId].DoF;
+            } else if (1 === i) {
+                console.log("assignedDoF: " + assignedDoF);
+                element[localNodeId].DoF = assignedDoF * (-1);
+                console.log(element);
+            } else {
+                element[localNodeId].DoF = idPool.assignDoFId() * (-1);
+            }
+
+            // update the assigned DoF to elements in array
+            elements[elementIdArrWithNode[i]] = element;
+
+            // update mapping
+            DoFToNodeMapArr[Math.abs(element[localNodeId].DoF)] = element[localNodeId].nodeId;
+
+            // update other node DoF and push it into stack
+            if (isNaN(element[localOtherNodeId].DoF)) {
+                // get the first element in the mapping array of the other node
+                let otherNodeId = element[localOtherNodeId].nodeId;
+                assignDoFToFirstElementWithNode(otherNodeId, elements, nodeToElementMapArr, (-1) * Math.sign(element[localNodeId].DoF));
+
+                // push the other node id into the node stack
+                nodeStk.push(otherNodeId);
+            }
+
+            elements[elementIdArrWithNode[i]] = element;
+        }
+    }
+
+    return DoFToNodeMapArr;
+}
+
+const assignDoFToFirstElementWithNode = function (nodeId, elements, nodeToElementMapArr, sign) {
+    let element = elements[nodeToElementMapArr[nodeId][0]];
+
+    let localNodeId = getLocalNodeId(element, nodeId);
+    element[localNodeId].DoF = idPool.assignDoFId() * sign;
+    elements[nodeToElementMapArr[nodeId][0]] = element;
+
+    return element;
+}
+
+// get local node id
+const getLocalNodeId = function (element, nodeId) {
+    if (element._1.nodeId === nodeId) {
+        return "_1";
+    } else if (element._2.nodeId === nodeId) {
+        return "_2";
+    } else {
+        throw "ERROR: node is not in the element"
     }
 }
 
-// count how many degree of freedom in total
-function countElement(node, counter) {
-    if (null === node) return;
-    counter.count += node.nexts.length;
-    if (node.nexts.length !== 0) {
-        node.nexts.forEach(next => {
-            countElement(next, counter);
-        });
-    }
+// get other local node id
+const getOtherLocalNodeId = function(localNodeId) {
+    if ("_1" === localNodeId) return "_2";
+    else if ("_2" === localNodeId) return "_1";
+    else throw "incorrect local node id";
 }
 
-// assign each node with an id
-function assignNodeWithId(node) {
-    // count how many nodes are there
-    let counter = {count : 0};
-    countNodes(node, counter);
+/////////////////////////////////////////
+/// testing code
+/////////////////////////////////////////
+// coordinates
+coords = [[-1.5, 0.0, 0.0], [-1.0, 0.0, 0.0], [-0.5, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.5, 0.0], [0.0, 1.0, 0.0]];
 
-    let idPool = Array.from(Array(counter.count).keys());
-    let idToNodeArr = new Array(idPool.length);
-    assignNodeIdFromPool(node, idPool, idToNodeArr);
-
-    return idToNodeArr;
-}
-
-// assign node id from a id pool
-function assignNodeIdFromPool(node, idPool, idToNodeArr) {
-    // do nothing if the node is null
-    if (null === node) return;
-
-    // assign an id from pool
-    let id = idPool[Math.floor(Math.random() * idPool.length)];
-    idToNodeArr[id] = node;
-    node.id = id;
-
-    // remove the assigned id
-    idPool = idPool.filter(elem => elem !== id);
-
-    // move on to next nodes
-    if (0 !== node.nexts.length) {
-        node.nexts.forEach(next => {
-            assignNodeIdFromPool(next, idPool, idToNodeArr);
-        });
-    }
-}
-
-// build element list
-
-//////////////////////////////////////////////
-// testing code
-//////////////////////////////////////////////
-let coords = [[-1.0, 0, 0],[0.5, 0, 0], [0, 0, 0], [0, 0.5, 0], [1.0, 1, 0], [1.0, 1.6, 0]];
+// nodes
 let nodes = new Array();
-
 coords.forEach(coord => {
-    nodes.push(createNode(coord));
+    let node = createNode(coord, idPool);
+    nodes[node.id] = node;
 });
 
-for (let i = 1; i < nodes.length; i++) {
-    nodes[i - 1].addNext(nodes[i]);
+let elements = new Array();
+for(let i = idPool.firstID; i < nodes.length - 1; i++) {
+    let element = createElement(nodes[i], nodes[i + 1], idPool);
+    elements[element.id] = element;
 }
 
-// check created node without id
-console.log(JSON.stringify(nodes[0]));
+let nodeToElementMapArr = createNodeToElementMap(nodes, elements);
+console.log(nodeToElementMapArr);
 
-// check node count
-counter = {count : 0};
-countNodes(nodes[0], counter);
-console.log(counter.count);
-
-// assigne id for each node
-let idArr = assignNodeWithId(nodes[0]);
-console.log(JSON.stringify(nodes[0]));
-idArr.forEach(elem => {
-    console.log(elem.id + ": " + elem.coord);
-});
-
-// output each 
-nodes.forEach(node => {
-    console.log("id = " + node.id);
-});
-
-// count element
-let elemCounter = {count : 0};
-countElement(nodes[0], elemCounter);
-console.log("element count = " + elemCounter.count);
+let DoFToNodeMapArr = assignDoFsToNodes(nodes, elements, nodeToElementMapArr, idPool);
+console.log("----------- DoF ------------")
+console.log(DoFToNodeMapArr);
+console.log("----------- Nodes ------------")
+console.log(nodes);
+console.log("----------- Elements ------------")
+console.log(elements);
