@@ -184,6 +184,21 @@ for(let i = idPool.firstID; i < nodes.length - 1; i++) {
     elements[element.id] = element;
 }
 
+// add a branch of nodes
+coordBranch = [[0.5, 0.5, 0], [1.0, 1.0, 0]];
+let nodesBranch = new Array();
+coordBranch.forEach(coord => {
+    let node = createNode(coord, idPool);
+    nodes[node.id] = node;
+    nodesBranch.push(node);
+});
+
+// add branch elements
+let elementMainToBranch = createElement(nodes[4], nodesBranch[0], idPool);
+let elementBranchConnect = createElement(nodesBranch[0], nodesBranch[1], idPool);
+elements[elementMainToBranch.id] = elementMainToBranch;
+elements[elementBranchConnect.id] = elementBranchConnect;
+
 let nodeToElementMapArr = createNodeToElementMap(nodes, elements);
 console.log(nodeToElementMapArr);
 
