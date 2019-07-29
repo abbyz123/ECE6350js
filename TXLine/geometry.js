@@ -111,7 +111,7 @@ const assignDoFsToNodes = function(nodes, elements, nodeToElementMapArr, idPool)
                 element[localNodeId].DoF = assignedDoF * (-1);
                 console.log(element);
             } else {
-                element[localNodeId].DoF = idPool.assignDoFId() * (-1);
+                element[localNodeId].DoF = idPool.assignDoFId() * (-1) * Math.sign(assignedDoF);
             }
 
             // update the assigned DoF to elements in array
