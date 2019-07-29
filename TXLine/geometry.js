@@ -107,9 +107,7 @@ const assignDoFsToNodes = function(nodes, elements, nodeToElementMapArr, idPool)
             if (0 === i) {
                 assignedDoF = element[localNodeId].DoF;
             } else if (1 === i) {
-                console.log("assignedDoF: " + assignedDoF);
                 element[localNodeId].DoF = assignedDoF * (-1);
-                console.log(element);
             } else {
                 element[localNodeId].DoF = idPool.assignDoFId() * (-1) * Math.sign(assignedDoF);
             }
@@ -200,12 +198,13 @@ elements[elementMainToBranch.id] = elementMainToBranch;
 elements[elementBranchConnect.id] = elementBranchConnect;
 
 let nodeToElementMapArr = createNodeToElementMap(nodes, elements);
-console.log(nodeToElementMapArr);
 
 let DoFToNodeMapArr = assignDoFsToNodes(nodes, elements, nodeToElementMapArr, idPool);
-console.log("----------- DoF ------------")
+console.log("----------- DoFs to Nodes ------------");
 console.log(DoFToNodeMapArr);
-console.log("----------- Nodes ------------")
+console.log("----------- Nodes ------------");
 console.log(nodes);
-console.log("----------- Elements ------------")
+console.log("----------- Elements ------------");
 console.log(elements);
+console.log("----------- ID Pool -----------");
+console.log(idPool);
